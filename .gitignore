@@ -35,3 +35,13 @@ secrets.yml
 .vscode/
 .idea/
 *.swp
+
+
+# Ad-hoc prediction inputs/outputs
+test_input.csv
+test_output.csv
+predictions.csv
+
+# Training metrics are persisted as part of model artifacts
+# (commit them if you want model-version history; gitignore if not)
+# -- Decision: commit them. They're small (<1KB) and useful.

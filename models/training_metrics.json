@@ -1,0 +1,22 @@
+{
+  "test_metrics": {
+    "roc_auc": 0.8431592136195716,
+    "pr_auc": 0.6503668192437593,
+    "threshold": 0.24,
+    "precision": 0.4527027027027027,
+    "recall": 0.8957219251336899,
+    "f1": 0.6014362657091562,
+    "tn": 630,
+    "fp": 405,
+    "fn": 39,
+    "tp": 335
+  },
+  "best_params": {
+    "clf__learning_rate": 0.05,
+    "clf__max_depth": 2,
+    "clf__n_estimators": 200
+  },
+  "best_cv_score": 0.8457066886058675,
+  "fn_cost": 5.0,
+  "fp_cost": 1.0
+}
