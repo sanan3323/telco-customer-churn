@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: churn-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: LOG_LEVEL
+        value: info
+    autoDeploy: true
