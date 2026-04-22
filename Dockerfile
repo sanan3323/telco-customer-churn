@@ -62,9 +62,9 @@ EXPOSE 8000
 # Health check: Docker pings /health every 30s. If it fails 3 times in a
 # row, the container is marked unhealthy and can be auto-restarted.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request, sys; \
-sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else sys.exit(1)"
+    CMD sh -c 'python -c "import urllib.request, sys, os; port=os.environ.get(\"PORT\",\"8000\"); sys.exit(0) if urllib.request.urlopen(f\"http://localhost:{port}/health\", timeout=3).status == 200 else sys.exit(1)"'
 
 # Start uvicorn bound to all interfaces (not just localhost) so the host
 # can reach the container via port mapping.
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Bind to $PORT if set (Render, Heroku, Fly.io all set this), else 8000.
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]
