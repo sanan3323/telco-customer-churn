@@ -1,0 +1,39 @@
+cat > .dockerignore << 'EOF'
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/
+
+# Data (too large to ship in image)
+data/
+
+# Git
+.git/
+.gitignore
+
+# macOS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Tests (not needed at runtime)
+tests/
+
+# Docs
+README.md
+*.md
+
+# CI
+.github/
+EOF
