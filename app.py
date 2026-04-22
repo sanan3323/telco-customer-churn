@@ -14,7 +14,7 @@ from typing import Any
 
 import joblib
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 
 from src.api_schemas import (
     BatchPredictionRequest,
@@ -26,7 +26,7 @@ from src.api_schemas import (
 from src.data import clean
 from src.schema import ALL_FEATURES, validate_features
 
-API_VERSION = "0.2.0"
+API_VERSION = "0.3.0"
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 MODEL_PATH = PROJECT_ROOT / "models" / "churn_pipeline.joblib"
@@ -34,7 +34,8 @@ MODEL_PATH = PROJECT_ROOT / "models" / "churn_pipeline.joblib"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("api")
 
-MODEL: dict[str, Any] = {}
+# Module-level state: populated in lifespan, read via get_model() dependency.
+_MODEL: dict[str, Any] = {}
 
 
 @asynccontextmanager
@@ -46,15 +47,26 @@ async def lifespan(app: FastAPI):
             "Run `python train.py` before starting the API."
         )
     artifact = joblib.load(MODEL_PATH)
-    MODEL["pipeline"] = artifact["pipeline"]
-    MODEL["threshold"] = artifact["threshold"]
-    MODEL["metrics"] = artifact.get("metrics", {})
+    _MODEL["pipeline"] = artifact["pipeline"]
+    _MODEL["threshold"] = artifact["threshold"]
+    _MODEL["metrics"] = artifact.get("metrics", {})
     log.info("Model loaded. threshold=%.3f test_roc_auc=%.4f",
-             MODEL["threshold"],
-             MODEL["metrics"].get("roc_auc", float("nan")))
+             _MODEL["threshold"],
+             _MODEL["metrics"].get("roc_auc", float("nan")))
     yield
     log.info("Shutting down")
-    MODEL.clear()
+    _MODEL.clear()
+
+
+def get_model() -> dict[str, Any]:
+    """FastAPI dependency: returns the loaded model.
+
+    Tests can override this via app.dependency_overrides[get_model] = ...
+    to inject a stub without touching disk.
+    """
+    if not _MODEL:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    return _MODEL
 
 
 app = FastAPI(
@@ -70,15 +82,15 @@ app = FastAPI(
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
-def _score_dataframe(df: pd.DataFrame) -> list[PredictionResponse]:
+def _score_dataframe(df: pd.DataFrame, model: dict[str, Any]) -> list[PredictionResponse]:
     """Clean → validate → predict. Shared by /predict and /predict/batch."""
     cleaned = clean(df)
     result = validate_features(cleaned[ALL_FEATURES])
     if not result.ok:
         raise HTTPException(status_code=422, detail={"errors": result.errors})
 
-    proba = MODEL["pipeline"].predict_proba(cleaned[ALL_FEATURES])[:, 1]
-    threshold = MODEL["threshold"]
+    proba = model["pipeline"].predict_proba(cleaned[ALL_FEATURES])[:, 1]
+    threshold = model["threshold"]
 
     def band(p: float) -> str:
         return "low" if p < 0.3 else "medium" if p < 0.6 else "high"
@@ -96,24 +108,26 @@ def _score_dataframe(df: pd.DataFrame) -> list[PredictionResponse]:
 
 # ── Endpoints ────────────────────────────────────────────────────────────
 @app.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
+def health(model: dict = Depends(get_model)) -> HealthResponse:
     """Liveness and readiness check."""
-    loaded = bool(MODEL)
     return HealthResponse(
-        status="ok" if loaded else "degraded",
-        model_loaded=loaded,
-        threshold=MODEL.get("threshold") if loaded else None,
-        test_roc_auc=MODEL.get("metrics", {}).get("roc_auc") if loaded else None,
+        status="ok",
+        model_loaded=True,
+        threshold=model["threshold"],
+        test_roc_auc=model.get("metrics", {}).get("roc_auc"),
         version=API_VERSION,
     )
 
 
 @app.post("/predict", response_model=PredictionResponse)
-def predict(customer: CustomerRecord) -> PredictionResponse:
+def predict(
+    customer: CustomerRecord,
+    model: dict = Depends(get_model),
+) -> PredictionResponse:
     """Score a single customer."""
     try:
         df = pd.DataFrame([customer.model_dump()])
-        return _score_dataframe(df)[0]
+        return _score_dataframe(df, model)[0]
     except HTTPException:
         raise
     except Exception as e:
@@ -122,11 +136,14 @@ def predict(customer: CustomerRecord) -> PredictionResponse:
 
 
 @app.post("/predict/batch", response_model=BatchPredictionResponse)
-def predict_batch(request: BatchPredictionRequest) -> BatchPredictionResponse:
+def predict_batch(
+    request: BatchPredictionRequest,
+    model: dict = Depends(get_model),
+) -> BatchPredictionResponse:
     """Score up to 1000 customers in a single call."""
     try:
         df = pd.DataFrame([c.model_dump() for c in request.customers])
-        predictions = _score_dataframe(df)
+        predictions = _score_dataframe(df, model)
         return BatchPredictionResponse(
             predictions=predictions,
             count=len(predictions),
