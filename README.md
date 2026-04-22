@@ -46,19 +46,24 @@ Response:
 ```
 
 ## Architecture
-┌────────────────┐      ┌──────────────────┐      ┌──────────────────┐
-│  Client        │─────▶│  FastAPI         │─────▶│  Sklearn         │
-│  (curl/docs/   │ POST │  /predict        │      │  Pipeline        │
-│   app/notebook)│      │  Pydantic schema │      │  (preprocess +   │
-└────────────────┘      │  validation      │      │   SMOTE + GBM)   │
-└──────────────────┘      └──────────────────┘
-│     ▲
-▼     │
-┌──────────────────┐
-│  joblib artifact │
-│  + threshold +   │
-│  training metrics│
-└──────────────────┘
+flowchart LR
+    %% Main Application Flow
+    Client["Client<br>(curl/docs/app/notebook)"] -- POST --> FastAPI["FastAPI<br>/predict<br>Pydantic schema validation"]
+    FastAPI --> Sklearn["Sklearn Pipeline<br>(preprocess + SMOTE + GBM)"]
+
+    %% Artifact Loading
+    Artifact["joblib artifact<br>+ threshold + training metrics"]
+    FastAPI <--> Artifact
+
+    %% Deployment and CI details
+    subgraph Deployment ["Deployment & Infrastructure"]
+        direction TB
+        Docker["Docker (Python 3.11-slim)"]
+        Render["Deployed on Render<br>(onrender.com URL)"]
+        CI["CI: auto-deploy on push to main"]
+        
+        Docker --- Render --- CI
+    end
 Deployment: Docker (Python 3.11-slim) - Render - onrender.com URL.
 CI: auto-deploy on push to main.
 
