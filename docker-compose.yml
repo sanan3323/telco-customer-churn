@@ -1,0 +1,38 @@
+# Docker Compose configuration for the Churn Prediction API.
+#
+# Usage:
+#   docker compose up              # start in foreground, streams logs
+#   docker compose up -d           # start in background
+#   docker compose down            # stop and remove containers
+#   docker compose logs -f api     # tail logs from the api service
+#   docker compose restart api     # restart just the api service
+#   docker compose ps              # list running services
+
+services:
+    api:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        image: churn-api:0.3.0
+        container_name: churn-api
+        ports:
+            # host:container — hit http://localhost:8000 on your Mac.
+            - "8000:8000"
+        volumes:
+            # Mount the local models directory into the container as read-only.
+            # This means you can retrain the model with `python train.py` and
+            # the running container picks up the new artifact on its next
+            # restart — no need to rebuild the image.
+            - ./models:/home/app/models:ro
+        environment:
+            # Any env vars the app reads. Today just an example for log level —
+            # in production you'd set things like DATABASE_URL, SENTRY_DSN,
+            # API_KEY here.
+            LOG_LEVEL: info
+        restart: unless-stopped
+        healthcheck:
+            test: [ "CMD", "python", "-c", "import urllib.request, sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else sys.exit(1)" ]
+            interval: 30s
+            timeout: 5s
+            start_period: 10s
+            retries: 3
