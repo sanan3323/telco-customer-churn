@@ -46,26 +46,16 @@ Response:
 ```
 
 ## Architecture
+
+```mermaid
 flowchart LR
-    %% Main Application Flow
-    Client["Client<br>(curl/docs/app/notebook)"] -- POST --> FastAPI["FastAPI<br>/predict<br>Pydantic schema validation"]
-    FastAPI --> Sklearn["Sklearn Pipeline<br>(preprocess + SMOTE + GBM)"]
+    Client["Client<br/>(curl / docs / app / notebook)"] -->|POST /predict| API
+    API["FastAPI<br/>Pydantic validation"] --> Pipeline
+    Pipeline["Sklearn Pipeline<br/>preprocess + SMOTE + GBM"]
+    Pipeline <--> Artifact["joblib artifact<br/>+ threshold<br/>+ training metrics"]
+```
 
-    %% Artifact Loading
-    Artifact["joblib artifact<br>+ threshold + training metrics"]
-    FastAPI <--> Artifact
-
-    %% Deployment and CI details
-    subgraph Deployment ["Deployment & Infrastructure"]
-        direction TB
-        Docker["Docker (Python 3.11-slim)"]
-        Render["Deployed on Render<br>(onrender.com URL)"]
-        CI["CI: auto-deploy on push to main"]
-        
-        Docker --- Render --- CI
-    end
-Deployment: Docker (Python 3.11-slim) - Render - onrender.com URL.
-CI: auto-deploy on push to main.
+**Deployment:** Docker (Python 3.11-slim) → Render. CI auto-deploys on push to `main`.
 
 ## Results
 
@@ -83,7 +73,7 @@ wasted retention offer). In production this ratio should come from finance,
 not the data scientist.
 
 ## What's in the repo
-
+```text
 .
 ├── app.py                 FastAPI service with /health, /predict, /predict/batch
 ├── train.py               End-to-end training: load → split → grid-search → evaluate → save
@@ -98,16 +88,16 @@ not the data scientist.
 │   └── api_schemas.py     Pydantic request/response models for the API layer
 ├── tests/                 29 unit + integration tests, including API contract tests
 ├── notebooks/
-│   └── telco-customer-churn-analysis.ipynb  Full analysis narrative
+│   └── telco-customer-churn-analysis.ipynb
 ├── models/
-│   ├── churn_pipeline.joblib    Trained pipeline + tuned threshold + metrics
-│   └── training_metrics.json    Performance record of the currently-deployed model
-├── Dockerfile             Multi-stage, non-root user, healthcheck, port-configurable
-├── docker-compose.yml     Local orchestration
-├── render.yaml            Deployment config (auto-deploy on push to main)
-├── requirements.txt       Pinned dependencies
-└── README.md              (this file)
-
+│   ├── churn_pipeline.joblib
+│   └── training_metrics.json
+├── Dockerfile
+├── docker-compose.yml
+├── render.yaml
+├── requirements.txt
+└── README.md
+```
 ## How it's built
 
 **Modeling.** Three classifiers compared on 5-fold stratified CV scored on ROC-AUC:
